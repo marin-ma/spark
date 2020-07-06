@@ -32,6 +32,7 @@ import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.exchange._
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.ThreadUtils
 
 /**
@@ -176,6 +177,10 @@ case class ShuffleQueryStageExec(
     val stats = resultOption.get.asInstanceOf[MapOutputStatistics]
     Option(stats)
   }
+
+  override def supportsColumnar: Boolean = plan.supportsColumnar
+
+  override def doExecuteColumnar(): RDD[ColumnarBatch] = plan.executeColumnar()
 }
 
 /**
