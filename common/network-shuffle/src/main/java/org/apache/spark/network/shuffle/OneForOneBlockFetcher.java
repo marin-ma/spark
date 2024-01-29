@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
@@ -274,18 +275,40 @@ public class OneForOneBlockFetcher {
     }
   }
 
+  private class LogChunkCallback implements ChunkReceivedCallback {
+      long startTime;
+      LogChunkCallback() {
+          this.startTime = System.nanoTime();
+      }
+      @Override
+      public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
+          chunkCallback.onSuccess(chunkIndex, buffer);
+          long fetchMicro = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - startTime);
+          logger.warn("SHUFFLE_READER_BREAKDOWN: [rpc fetch success]" + Thread.currentThread().getId() + " " +
+                  TimeUnit.NANOSECONDS.toMicros(startTime) + " " + fetchMicro + " id:" + client.hashCode());
+      }
+      @Override
+      public void onFailure(int chunkIndex, Throwable e) {
+          chunkCallback.onFailure(chunkIndex, e);
+      }
+  }
+
   /**
    * Begins the fetching process, calling the listener with every block fetched.
    * The given message will be serialized with the Java serializer, and the RPC must return a
    * {@link StreamHandle}. We will send all fetch requests immediately, without throttling.
    */
   public void start() {
+    long startFetch = System.nanoTime();
     client.sendRpc(message.toByteBuffer(), new RpcResponseCallback() {
       @Override
       public void onSuccess(ByteBuffer response) {
         try {
           streamHandle = (StreamHandle) BlockTransferMessage.Decoder.fromByteBuffer(response);
           logger.trace("Successfully opened blocks {}, preparing to fetch chunks.", streamHandle);
+          long fetchMicro = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - startFetch);
+          logger.warn("SHUFFLE_READER_BREAKDOWN: [rpc fetch start]" + Thread.currentThread().getId() + " " +
+                  TimeUnit.NANOSECONDS.toMicros(startFetch) + " " + fetchMicro + " id:" + client.hashCode());
 
           // Immediately request all chunks -- we expect that the total size of the request is
           // reasonable due to higher level chunking in [[ShuffleBlockFetcherIterator]].
@@ -294,7 +317,7 @@ public class OneForOneBlockFetcher {
               client.stream(OneForOneStreamManager.genStreamChunkId(streamHandle.streamId, i),
                 new DownloadCallback(i));
             } else {
-              client.fetchChunk(streamHandle.streamId, i, chunkCallback);
+              client.fetchChunk(streamHandle.streamId, i, new LogChunkCallback());
             }
           }
         } catch (Exception e) {
