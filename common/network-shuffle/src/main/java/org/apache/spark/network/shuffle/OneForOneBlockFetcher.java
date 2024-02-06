@@ -285,7 +285,7 @@ public class OneForOneBlockFetcher {
           chunkCallback.onSuccess(chunkIndex, buffer);
           long fetchMicro = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - startTime);
           logger.warn("SHUFFLE_READER_BREAKDOWN: [rpc fetch success]" + Thread.currentThread().getId() + " " +
-                  TimeUnit.NANOSECONDS.toMicros(startTime) + " " + fetchMicro + " id:" + client.hashCode());
+                  TimeUnit.NANOSECONDS.toMicros(startTime) + " " + fetchMicro + " id:" + client.hashCode() + " blockid:" + blockIds[chunkIndex]);
       }
       @Override
       public void onFailure(int chunkIndex, Throwable e) {
